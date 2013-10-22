@@ -2,11 +2,14 @@ package br.rcp.dbtofile;
 
 import br.rcp.dbtofile.DBParser;
 import br.rcp.dbtofile.BusinessDB;
+
+import java.io.File;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -27,7 +30,7 @@ public class AppTest {
             conn.prepareStatement("create table tbl(id int, name text, address char(50), value real)").execute();
 
             PreparedStatement stm = conn.prepareStatement("insert into tbl(id,name,address,value)values(?,?,?,?)");
-            for(int i = 0; i < 1000000; i++){
+            for(int i = 0; i < 10000; i++){
                 stm.setInt(1, i);
                 stm.setString(2, "Nome do cara " + i);
                 stm.setString(3, "Endereço do cara " + i);
@@ -49,19 +52,26 @@ public class AppTest {
     @Test
     public void testApp() throws Exception {
         try{
-            Properties props = new Properties();
-            props.setProperty("encoding", "UTF-8");
-            props.setProperty("dbUrl", dbUrl);
-            props.setProperty("exportToFile", "output.txt");
-            BusinessDB b = new BusinessDB(props);
+            BusinessDBConfiguration config = new BusinessDBConfiguration()
+            	.setDbUrl(dbUrl)
+            	.setEncoding("UTF-8");
+            
+			BusinessDB b = new BusinessDB(config);
 
             long initAt = System.currentTimeMillis();
-            b.loadData("test.output.txt", new DBParser() {
+            File tempFile = File.createTempFile("test.output", ".txt");
+            System.out.println("Escrevendo no arquivo "+tempFile.getAbsolutePath());
+            b.loadData(tempFile.getAbsolutePath(), new DBParser() {
                 @Override
                 public String sql() {
                     return "select id,name,address,value from tbl";
                 }
 
+                @Override
+                public String header() {
+                	return "id\tname\taddress\tvalue\n";
+                }
+                
                 @Override
                 public String toStringRow(ResultSet rs) throws SQLException {
                     StringBuilder sb = new StringBuilder();
@@ -71,8 +81,14 @@ public class AppTest {
                     sb.append(rs.getBigDecimal(4)).append("\n");
                     return sb.toString();
                 }
+
+				@Override
+				public String footer() {
+					return "";
+				}
             });
-            System.out.println("Total de execução: " + (System.currentTimeMillis() - initAt) + " ms");
+            System.out.println("Tempo total de execução: " + (System.currentTimeMillis() - initAt) + " ms");
+            Runtime.getRuntime().exec("open "+ tempFile.getAbsolutePath());
         }catch(SQLException ex){
             Logger.getLogger(AppTest.class.getName()).log(Level.SEVERE, null, ex);
             throw new RuntimeException(ex);

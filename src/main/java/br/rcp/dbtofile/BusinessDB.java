@@ -8,6 +8,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.file.Paths;
@@ -29,15 +30,15 @@ public class BusinessDB {
 
     private Connection conn;
 
-    private Properties props;
+    private BusinessDBConfiguration config;
 
-    public BusinessDB(Properties props) {
-        this.props = props;
-        encoder = Charset.forName(props.getProperty("encoding")).newEncoder();
+    public BusinessDB(BusinessDBConfiguration config) {
+        this.config = config;
+        encoder = Charset.forName(config.getEncoding()).newEncoder();
     }
 
     protected void connect() throws SQLException {
-        conn = DriverManager.getConnection(props.getProperty("dbUrl"), props);
+        conn = DriverManager.getConnection(config.getDbUrl(), config.getDbProps());
     }
 
     public void loadData(String filename, DBParser parser) throws SQLException, IOException, ExecutionException, InterruptedException {
@@ -45,16 +46,21 @@ public class BusinessDB {
 
         PreparedStatement stm = null;
         ResultSet rs = null;
-        FileChannel fileChannel = new FileOutputStream(Paths.get(filename).toFile()).getChannel();
+        FileOutputStream fileOutputStream = null;
+		FileChannel fileChannel = null;
 
         try{
+        	fileOutputStream = new FileOutputStream(Paths.get(filename).toFile());
+        	fileChannel = fileOutputStream.getChannel();
+        	
             stm = conn.prepareStatement(parser.sql(), ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
             rs = stm.executeQuery();
 
+            write(fileChannel, parser.header());
             while(rs.next()){
-                String line = parser.toStringRow(rs);
-                fileChannel.write(encoder.encode(CharBuffer.wrap(line)));
+                write(fileChannel, parser.toStringRow(rs));
             }
+            write(fileChannel, parser.footer());
             fileChannel.close();
         }finally{
             if(rs != null)
@@ -63,9 +69,15 @@ public class BusinessDB {
                 stm.close();
             if(fileChannel != null && fileChannel.isOpen())
                 fileChannel.close();
+            if(fileOutputStream != null)
+            	fileOutputStream.close();
             disconnect();
         }
     }
+
+	private void write(FileChannel fileChannel, String content) throws IOException, CharacterCodingException {
+		fileChannel.write(encoder.encode(CharBuffer.wrap(content)));
+	}
 
     protected void disconnect() throws SQLException {
         if(conn != null && !conn.isClosed())

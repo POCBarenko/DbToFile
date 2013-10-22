@@ -8,12 +8,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
- <p/>
- @author barenko
+ * <p/>
+ * 
+ * @author barenko
  */
 public interface DBParser {
 
-    String sql();
+	String sql();
+	
+	String header();
 
-    String toStringRow(ResultSet rs) throws SQLException;
+	String toStringRow(ResultSet rs) throws SQLException;
+
+	String footer();
 }
